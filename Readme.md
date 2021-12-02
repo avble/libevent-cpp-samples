@@ -1,7 +1,7 @@
 # Compilation
 ## Obtain the dependent source code
-``` git submodule init ```: register submodule 
-``` git submodule update ```: pull the libevent module
++ ``` git submodule init ```: register submodule 
++ ``` git submodule update ```: pull the libevent module
 
 ## Compile the libevent
 ``` bash
