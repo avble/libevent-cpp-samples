@@ -23,7 +23,7 @@ make
 # Get started
 TBD
 
-# Python biding
+# Python binding
 TBD
 
 # Reference
