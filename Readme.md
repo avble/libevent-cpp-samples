@@ -2,7 +2,7 @@
 Implement the websocket server based on libevent
 
 # Compile
-## Obtain the dependent source code
+## Obtain the dependent
 + ``` git submodule init ```: register submodule 
 + ``` git submodule update ```: pull the libevent module
 
