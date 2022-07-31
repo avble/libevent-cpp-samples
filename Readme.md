@@ -1,5 +1,5 @@
 # Introduction
-Implement the websocket server based on libevent
+This demonstartion implementation of websocket server based on libevent
 
 # Compile
 ## Obtain the dependent
