@@ -8,7 +8,7 @@ $ make
 ```
 
 # samples
-## [http](https://github.com/avble/libevent-cpp-samples/http)
+## [http](https://github.com/avble/libevent-cpp-samples/tree/main/http)
 
 ``` cpp
 #include "http.hpp"

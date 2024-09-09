@@ -1,4 +1,0 @@
-[submodule "deps/libevent-2.1"]
-	path = deps/libevent-2.1
-	url = git@github.com:libevent/libevent.git
-	branch = patches-2.1
