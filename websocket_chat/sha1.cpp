@@ -298,7 +298,7 @@ char * base64_encode(const unsigned char * data, size_t input_length, size_t * o
 {
     *output_length = 4 * ((input_length + 2) / 3);
 
-    char * encoded_data = calloc(1, *output_length + 1);
+    char * encoded_data = (char *) calloc(1, *output_length + 1);
     if (encoded_data == NULL)
         return NULL;
 
@@ -330,44 +330,4 @@ std::string base64_encode_cpp(const std::vector<char> & data)
     std::string ans(b64_endcode_, b64_endcode_ + len_);
     free(b64_endcode_);
     return ans;
-}
-
-void DumpHex(const void * data, size_t size)
-{
-    char ascii[17];
-    size_t i, j;
-    ascii[16] = '\0';
-    for (i = 0; i < size; ++i)
-    {
-        printf("%02X ", ((unsigned char *) data)[i]);
-        if (((unsigned char *) data)[i] >= ' ' && ((unsigned char *) data)[i] <= '~')
-        {
-            ascii[i % 16] = ((unsigned char *) data)[i];
-        }
-        else
-        {
-            ascii[i % 16] = '.';
-        }
-        if ((i + 1) % 8 == 0 || i + 1 == size)
-        {
-            printf(" ");
-            if ((i + 1) % 16 == 0)
-            {
-                printf("|  %s \n", ascii);
-            }
-            else if (i + 1 == size)
-            {
-                ascii[(i + 1) % 16] = '\0';
-                if ((i + 1) % 16 <= 8)
-                {
-                    printf(" ");
-                }
-                for (j = (i + 1) % 16; j < 16; ++j)
-                {
-                    printf("   ");
-                }
-                printf("|  %s \n", ascii);
-            }
-        }
-    }
 }

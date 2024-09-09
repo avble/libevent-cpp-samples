@@ -30,6 +30,5 @@ void SHA1(char * hash_out, const char * str, int len);
 std::vector<char> SHA1_CPP(const std::string & data);
 
 char * base64_encode(const unsigned char * data, size_t input_length, size_t * output_length);
-std::string base64_encode_cpp(const std::vector<char> & data);
 
-void DumpHex(const void * data, size_t size);
+std::string base64_encode_cpp(const std::vector<char> & data);
