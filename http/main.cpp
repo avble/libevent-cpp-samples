@@ -1,20 +1,8 @@
-# Introduction
-samples in cpp for libevents
-
-# Compile
-``` shell
-$ mkdir build && cd build && cmake ..
-$ make
-```
-
-# samples
-## [http](https://github.com/avble/libevent-cpp-samples/http)
-
-``` cpp
 #include "http.hpp"
 
 int main(int argc, char ** argv)
 {
+
     event_base * base = event_base_global();
 
     auto http = make_http(base, "0.0.0.0", 12345);
@@ -27,4 +15,3 @@ int main(int argc, char ** argv)
 
     event_base_free(base);
 }
-```

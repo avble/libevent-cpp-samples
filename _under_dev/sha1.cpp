@@ -24,36 +24,40 @@ A million repetitions of "a"
 
 #include "sha1.h"
 
-
 #define rol(value, bits) (((value) << (bits)) | ((value) >> (32 - (bits))))
 
 /* blk0() and blk() perform the initial expand. */
 /* I got the idea of expanding during the round function from SSLeay */
 #if BYTE_ORDER == LITTLE_ENDIAN
-#define blk0(i) (block->l[i] = (rol(block->l[i],24)&0xFF00FF00) \
-    |(rol(block->l[i],8)&0x00FF00FF))
+#define blk0(i) (block->l[i] = (rol(block->l[i], 24) & 0xFF00FF00) | (rol(block->l[i], 8) & 0x00FF00FF))
 #elif BYTE_ORDER == BIG_ENDIAN
 #define blk0(i) block->l[i]
 #else
 #error "Endianness not defined!"
 #endif
-#define blk(i) (block->l[i&15] = rol(block->l[(i+13)&15]^block->l[(i+8)&15] \
-    ^block->l[(i+2)&15]^block->l[i&15],1))
+#define blk(i)                                                                                                                     \
+    (block->l[i & 15] = rol(block->l[(i + 13) & 15] ^ block->l[(i + 8) & 15] ^ block->l[(i + 2) & 15] ^ block->l[i & 15], 1))
 
 /* (R0+R1), R2, R3, R4 are the different operations used in SHA1 */
-#define R0(v,w,x,y,z,i) z+=((w&(x^y))^y)+blk0(i)+0x5A827999+rol(v,5);w=rol(w,30);
-#define R1(v,w,x,y,z,i) z+=((w&(x^y))^y)+blk(i)+0x5A827999+rol(v,5);w=rol(w,30);
-#define R2(v,w,x,y,z,i) z+=(w^x^y)+blk(i)+0x6ED9EBA1+rol(v,5);w=rol(w,30);
-#define R3(v,w,x,y,z,i) z+=(((w|x)&y)|(w&x))+blk(i)+0x8F1BBCDC+rol(v,5);w=rol(w,30);
-#define R4(v,w,x,y,z,i) z+=(w^x^y)+blk(i)+0xCA62C1D6+rol(v,5);w=rol(w,30);
-
+#define R0(v, w, x, y, z, i)                                                                                                       \
+    z += ((w & (x ^ y)) ^ y) + blk0(i) + 0x5A827999 + rol(v, 5);                                                                   \
+    w = rol(w, 30);
+#define R1(v, w, x, y, z, i)                                                                                                       \
+    z += ((w & (x ^ y)) ^ y) + blk(i) + 0x5A827999 + rol(v, 5);                                                                    \
+    w = rol(w, 30);
+#define R2(v, w, x, y, z, i)                                                                                                       \
+    z += (w ^ x ^ y) + blk(i) + 0x6ED9EBA1 + rol(v, 5);                                                                            \
+    w = rol(w, 30);
+#define R3(v, w, x, y, z, i)                                                                                                       \
+    z += (((w | x) & y) | (w & x)) + blk(i) + 0x8F1BBCDC + rol(v, 5);                                                              \
+    w = rol(w, 30);
+#define R4(v, w, x, y, z, i)                                                                                                       \
+    z += (w ^ x ^ y) + blk(i) + 0xCA62C1D6 + rol(v, 5);                                                                            \
+    w = rol(w, 30);
 
 /* Hash a single 512-bit block. This is the core of the algorithm. */
 
-void SHA1Transform(
-    uint32_t state[5],
-    const unsigned char buffer[64]
-)
+void SHA1Transform(uint32_t state[5], const unsigned char buffer[64])
 {
     uint32_t a, b, c, d, e;
 
@@ -64,7 +68,7 @@ void SHA1Transform(
     } CHAR64LONG16;
 
 #ifdef SHA1HANDSOFF
-    CHAR64LONG16 block[1];      /* use array to appear as a pointer */
+    CHAR64LONG16 block[1]; /* use array to appear as a pointer */
 
     memcpy(block, buffer, 64);
 #else
@@ -73,7 +77,7 @@ void SHA1Transform(
      * And the result is written through.  I threw a "const" in, hoping
      * this will cause a diagnostic.
      */
-    CHAR64LONG16 *block = (const CHAR64LONG16 *) buffer;
+    CHAR64LONG16 * block = (const CHAR64LONG16 *) buffer;
 #endif
     /* Copy context->state[] to working vars */
     a = state[0];
@@ -175,12 +179,9 @@ void SHA1Transform(
 #endif
 }
 
-
 /* SHA1Init - Initialize new context */
 
-void SHA1Init(
-    SHA1_CTX * context
-)
+void SHA1Init(SHA1_CTX * context)
 {
     /* SHA1 initialization constants */
     context->state[0] = 0x67452301;
@@ -191,14 +192,9 @@ void SHA1Init(
     context->count[0] = context->count[1] = 0;
 }
 
-
 /* Run your data through this. */
 
-void SHA1Update(
-    SHA1_CTX * context,
-    const unsigned char *data,
-    uint32_t len
-)
+void SHA1Update(SHA1_CTX * context, const unsigned char * data, uint32_t len)
 {
     uint32_t i;
 
@@ -224,13 +220,9 @@ void SHA1Update(
     memcpy(&context->buffer[j], &data[i], len - i);
 }
 
-
 /* Add padding and return the message digest. */
 
-void SHA1Final(
-    unsigned char digest[20],
-    SHA1_CTX * context
-)
+void SHA1Final(unsigned char digest[20], SHA1_CTX * context)
 {
     unsigned i;
 
@@ -238,7 +230,7 @@ void SHA1Final(
 
     unsigned char c;
 
-#if 0    /* untested "improvement" by DHR */
+#if 0 /* untested "improvement" by DHR */
     /* Convert context->count to a sequence of bytes
      * in finalcount.  Second element first, but
      * big-endian order within element.
@@ -257,7 +249,7 @@ void SHA1Final(
 #else
     for (i = 0; i < 8; i++)
     {
-        finalcount[i] = (unsigned char) ((context->count[(i >= 4 ? 0 : 1)] >> ((3 - (i & 3)) * 8)) & 255);      /* Endian independent */
+        finalcount[i] = (unsigned char) ((context->count[(i >= 4 ? 0 : 1)] >> ((3 - (i & 3)) * 8)) & 255); /* Endian independent */
     }
 #endif
     c = 0200;
@@ -270,65 +262,52 @@ void SHA1Final(
     SHA1Update(context, finalcount, 8); /* Should cause a SHA1Transform() */
     for (i = 0; i < 20; i++)
     {
-        digest[i] = (unsigned char)
-            ((context->state[i >> 2] >> ((3 - (i & 3)) * 8)) & 255);
+        digest[i] = (unsigned char) ((context->state[i >> 2] >> ((3 - (i & 3)) * 8)) & 255);
     }
     /* Wipe variables */
     memset(context, '\0', sizeof(*context));
     memset(&finalcount, '\0', sizeof(finalcount));
 }
 
-void SHA1(
-    char *hash_out,
-    const char *str,
-    int len)
+void SHA1(char * hash_out, const char * str, int len)
 {
-    //printf("[DEBUG] %s, %d \n", __FILE__, __LINE__);
     SHA1_CTX ctx;
-    //printf("[DEBUG] %s, %d \n", __FILE__, __LINE__);
     unsigned int ii;
 
-    //printf("[DEBUG] %s, %d \n", __FILE__, __LINE__);
-
     SHA1Init(&ctx);
-    //printf("[DEBUG] %s, %d \n", __FILE__, __LINE__);
-    for (ii=0; ii<len; ii+=1)
-        SHA1Update(&ctx, (const unsigned char*)str + ii, 1);
-    //printf("[DEBUG] %s, %d \n", __FILE__, __LINE__);
-    SHA1Final((unsigned char *)hash_out, &ctx);
-    //printf("[DEBUG] %s, %d \n", __FILE__, __LINE__);
+    for (ii = 0; ii < len; ii += 1)
+        SHA1Update(&ctx, (const unsigned char *) str + ii, 1);
+    SHA1Final((unsigned char *) hash_out, &ctx);
 }
 
+std::vector<char> SHA1_CPP(const std::string & data)
+{
+    char hash_out[20]{ 0 };
+    SHA1(&hash_out[0], data.c_str(), data.size());
 
-static char encoding_table[] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
-                                'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
-                                'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
-                                'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',
-                                'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
-                                'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
-                                'w', 'x', 'y', 'z', '0', '1', '2', '3',
-                                '4', '5', '6', '7', '8', '9', '+', '/'};
-static int mod_table[] = {0, 2, 1};
+    return std::vector<char>(&hash_out[0], &hash_out[0] + 20);
+}
 
+static char encoding_table[] = { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+                                 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',
+                                 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+                                 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '/' };
+static int mod_table[]       = { 0, 2, 1 };
 
-char *base64_encode(const unsigned char *data,
-                    size_t input_length,
-                    size_t *output_length) {
-	// printf("inside \n");
-
-	// for (int i = 0; i < 20; i++)
-	// 	printf("%hhX", data[i]);
-
+char * base64_encode(const unsigned char * data, size_t input_length, size_t * output_length)
+{
     *output_length = 4 * ((input_length + 2) / 3);
 
-    char *encoded_data = calloc(1, *output_length + 1);
-    if (encoded_data == NULL) return NULL;
+    char * encoded_data = calloc(1, *output_length + 1);
+    if (encoded_data == NULL)
+        return NULL;
 
-    for (int i = 0, j = 0; i < input_length;) {
+    for (int i = 0, j = 0; i < input_length;)
+    {
 
-        uint32_t octet_a = i < input_length ? (unsigned char)data[i++] : 0;
-        uint32_t octet_b = i < input_length ? (unsigned char)data[i++] : 0;
-        uint32_t octet_c = i < input_length ? (unsigned char)data[i++] : 0;
+        uint32_t octet_a = i < input_length ? (unsigned char) data[i++] : 0;
+        uint32_t octet_b = i < input_length ? (unsigned char) data[i++] : 0;
+        uint32_t octet_c = i < input_length ? (unsigned char) data[i++] : 0;
 
         uint32_t triple = (octet_a << 0x10) + (octet_b << 0x08) + octet_c;
 
@@ -344,33 +323,51 @@ char *base64_encode(const unsigned char *data,
     return encoded_data;
 }
 
-
-void DumpHex(const void* data, size_t size) {
-	char ascii[17];
-	size_t i, j;
-	ascii[16] = '\0';
-	for (i = 0; i < size; ++i) {
-		printf("%02X ", ((unsigned char*)data)[i]);
-		if (((unsigned char*)data)[i] >= ' ' && ((unsigned char*)data)[i] <= '~') {
-			ascii[i % 16] = ((unsigned char*)data)[i];
-		} else {
-			ascii[i % 16] = '.';
-		}
-		if ((i+1) % 8 == 0 || i+1 == size) {
-			printf(" ");
-			if ((i+1) % 16 == 0) {
-				printf("|  %s \n", ascii);
-			} else if (i+1 == size) {
-				ascii[(i+1) % 16] = '\0';
-				if ((i+1) % 16 <= 8) {
-					printf(" ");
-				}
-				for (j = (i+1) % 16; j < 16; ++j) {
-					printf("   ");
-				}
-				printf("|  %s \n", ascii);
-			}
-		}
-	}
+std::string base64_encode_cpp(const std::vector<char> & data)
+{
+    size_t len_       = 0;
+    auto b64_endcode_ = base64_encode((const unsigned char *) data.data(), data.size(), &len_);
+    std::string ans(b64_endcode_, b64_endcode_ + len_);
+    free(b64_endcode_);
+    return ans;
 }
 
+void DumpHex(const void * data, size_t size)
+{
+    char ascii[17];
+    size_t i, j;
+    ascii[16] = '\0';
+    for (i = 0; i < size; ++i)
+    {
+        printf("%02X ", ((unsigned char *) data)[i]);
+        if (((unsigned char *) data)[i] >= ' ' && ((unsigned char *) data)[i] <= '~')
+        {
+            ascii[i % 16] = ((unsigned char *) data)[i];
+        }
+        else
+        {
+            ascii[i % 16] = '.';
+        }
+        if ((i + 1) % 8 == 0 || i + 1 == size)
+        {
+            printf(" ");
+            if ((i + 1) % 16 == 0)
+            {
+                printf("|  %s \n", ascii);
+            }
+            else if (i + 1 == size)
+            {
+                ascii[(i + 1) % 16] = '\0';
+                if ((i + 1) % 16 <= 8)
+                {
+                    printf(" ");
+                }
+                for (j = (i + 1) % 16; j < 16; ++j)
+                {
+                    printf("   ");
+                }
+                printf("|  %s \n", ascii);
+            }
+        }
+    }
+}
