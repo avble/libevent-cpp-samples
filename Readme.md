@@ -12,55 +12,60 @@ $ make
 ## [http](https://github.com/avble/libevent-cpp-samples/tree/main/http)
 
 ``` cpp
-#include "http.hpp"
+    typedef std::function<void(std::shared_ptr<http::request>)> route_hanhdl_func;
 
-int main(int argc, char ** argv)
-{
-    event_base * base = event_base_global();
+    evhttp * p_evhttp = evhttp_new(Event::event_base_global());
+    std::string addr  = "127.0.0.1";
+    uint16_t port     = 12345;
+    std::unordered_map<std::string, route_hanhdl_func> routes;
 
-    auto http = make_http(base, "0.0.0.0", 12345);
+    routes["/route_01"] = [](std::shared_ptr<http::request> req) { req->do_write("hello from route 01\n"); };
+    routes["/route_02"] = [](std::shared_ptr<http::request> req) { req->do_write("hello from route 02\n"); };
 
-    http->add_handler("/route_01", [](std::shared_ptr<http::request> req) { req->do_write("hello from route 01\n"); });
-    http->add_handler("/route_02", [](std::shared_ptr<http::request> req) { req->do_write("hello from route 02\n"); });
-    http->start();
+    const auto request_dispatch = [&routes](std::shared_ptr<http::request> req) {
+        auto path = req->get_uri_path();
+        if (auto route_ = (path.has_value() ? routes[path.value()] : route_hanhdl_func()))
+        {
+            route_(req);
+        }
+        else
+        {
+            req->do_write("wowo...");
+        }
+    };
 
-    event_base_dispatch(base);
+    auto on_accept = [&request_dispatch](struct evhttp_connection * evcon) {
+        std::make_shared<http_connection>(evcon, std::bind(request_dispatch, ::_1))->start();
+    };
 
-    event_base_free(base);
-}
+    http::start_async(p_evhttp, port, on_accept, ::_1);
+
+    Event::run_forever();
 ```
 
 ## [websocket chat application](https://github.com/avble/libevent-cpp-samples/tree/main/websocket_chat)
 
-The example code of program is as below.
+source code of websocket looks like below
 
 ``` cpp
-#include "http.hpp"
+    evhttp * p_evhttp = evhttp_new(Event::event_base_global());
 
-// ws handle for chat application
-void ws_chat_handler(const std::string & msg, std::shared_ptr<ws_connection> sp)
-{
-    std::cout << "[DEBUG][ws_chat_handler] ENTER" << std::endl;
-    auto peers = ws_connection::peer_mgr[sp->topic];
-    for (auto & peer : peers)
-    {
-        // deliver message to peers which has the same topics
-        if (auto peer_lock = peer.lock())
-            Event::call_soon(std::bind(&ws_connection::do_write_msg, peer_lock, std::placeholders::_1), msg);
-    }
-};
+    auto ws_chat_handler = [](const std::string & msg, std::shared_ptr<ws_connection> sp) {
+        auto peers = ws_connection::peer_mgr[sp->topic];
+        for (auto & peer : peers)
+        {
+            // deliver message to peers which has the same topics
+            if (auto peer_lock = peer.lock())
+                Event::call_soon(std::bind(&ws_connection::do_write_msg, peer_lock, std::placeholders::_1), msg);
+        }
+    };
 
-// main
-int main(int argc, char ** argv)
-{
-    //.........
-    event_base * base = Event::event_base_global();
+    auto on_accept = [&ws_chat_handler](struct evhttp_connection * evcon) {
+        std::make_shared<ws_connection>(evcon, std::bind(ws_chat_handler, ::_1, ::_2))->start();
+    };
 
-    auto ws = make_ws(base, addr, port);
+    // start server
+    http::start_async(p_evhttp, port, on_accept, ::_1);
 
-    ws->add_ws_handler(ws_chat_handler);
-
-    ws->start();
-    //........
-}
+    Event::run_forever();
 ```

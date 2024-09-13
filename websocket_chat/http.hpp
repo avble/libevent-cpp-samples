@@ -156,39 +156,106 @@ public:
     int response_code;
 };
 
-void http_init(struct evhttp * p_evhttp, std::string addr, int port,
-               std::function<void(int ec, evhttp_connection * evhttp_con)> && func)
+template <class F, class... Args>
+void start_async(evhttp * http, unsigned short port, F f, Args... args)
 {
-    class listener_ev_cb_obj
+    class _internal_data
     {
-        typedef std::function<void(int ec, evhttp_connection * evhttp_con)> on_accept_cb;
+    public:
+        _internal_data(evhttp * http_, F f, Args... args) : cb(std::bind(f, args...)) { http = http_; }
+
+        void operator()(evhttp_connection * evcon) { cb(evcon); }
 
     public:
-        listener_ev_cb_obj(on_accept_cb && on_accept_, struct evhttp * p_)
-        {
-            on_accept = std::move(on_accept_);
-            p_evhttp  = p_;
-        }
-
-        void operator()(int ec, evhttp_connection * evhttp_con) { on_accept(ec, evhttp_con); }
-
-        struct evhttp * get_evhttp() const { return p_evhttp; }
+        evhttp * http;
 
     private:
-        on_accept_cb on_accept;
-        struct evhttp * p_evhttp;
+        std::function<void(evhttp_connection *)> cb;
     };
-    evconnlistener_cb accept_cb = [](struct evconnlistener * listener_ev, evutil_socket_t fd, struct sockaddr * sa, int socklen,
-                                     void * arg) {
-        listener_ev_cb_obj * on_accept = (listener_ev_cb_obj *) arg;
-        evhttp_connection * evcon      = evhttp_get_request_connection_wrapper(on_accept->get_evhttp(), fd, sa, socklen);
-        evcon->http_server             = on_accept->get_evhttp();
-        TAILQ_INSERT_TAIL(&evcon->http_server->connections, evcon, next);
-        (*on_accept)(0, evcon);
+
+    auto on_accept = [](struct evconnlistener * listener, evutil_socket_t fd, struct sockaddr * sa, int socklen, void * arg) {
+        _internal_data * p = (_internal_data *) arg;
+
+        char addr[256]{ 0 };
+        int16_t port = ((struct sockaddr_in *) sa)->sin_port;
+        if (sa->sa_family == AF_INET)
+        {
+            if (inet_ntop(AF_INET, &((struct sockaddr_in *) sa)->sin_addr, &addr[0], sizeof(addr)) == NULL)
+                std::cerr << "can not get ip address" << std::endl;
+            else
+                std::cout << "[DEBUG] incomming addr: " << addr << ":" << port << std::endl;
+        }
+
+        evhttp_connection * evcon = evhttp_connection_base_bufferevent_new(Event::event_base_global(), NULL, NULL, addr, port);
+        evcon->http_server        = p->http;
+        TAILQ_INSERT_TAIL(&p->http->connections, evcon, next);
+        p->http->connection_cnt++;
+
+        evcon->max_headers_size = p->http->default_max_headers_size;
+        evcon->max_body_size    = p->http->default_max_body_size;
+        if (p->http->flags & EVHTTP_SERVER_LINGERING_CLOSE)
+            evcon->flags |= EVHTTP_CON_LINGERING_CLOSE;
+
+        evcon->flags |= EVHTTP_CON_INCOMING;
+        evcon->state = EVCON_READING_FIRSTLINE;
+
+        if (bufferevent_replacefd(evcon->bufev, fd))
+            goto err;
+        (*p)(evcon);
+        return;
+    err:
+        evhttp_connection_free(evcon);
     };
-    struct evhttp_bound_socket * bound_socket = evhttp_bind_socket_with_handle(p_evhttp, addr.c_str(), port);
-    evconnlistener_set_cb(bound_socket->listener, accept_cb, new listener_ev_cb_obj(std::move(func), p_evhttp));
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family      = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    addr.sin_port = htons(port);
+    int flags     = 0;
+    flags |= LEV_OPT_CLOSE_ON_FREE;
+    flags |= LEV_OPT_CLOSE_ON_EXEC;
+    flags |= LEV_OPT_REUSEABLE;
+    struct sockaddr * sa = (struct sockaddr *) &addr;
+
+    auto listener = evconnlistener_new_bind(Event::event_base_global(), on_accept, new _internal_data(http, f, args...), flags, -1,
+                                            sa, sizeof(sockaddr_in));
 };
+
+// void http_init(struct evhttp * p_evhttp, std::string addr, int port,
+//                std::function<void(int ec, evhttp_connection * evhttp_con)> && func)
+// {
+//     class listener_ev_cb_obj
+//     {
+//         typedef std::function<void(int ec, evhttp_connection * evhttp_con)> on_accept_cb;
+
+//     public:
+//         listener_ev_cb_obj(on_accept_cb && on_accept_, struct evhttp * p_)
+//         {
+//             on_accept = std::move(on_accept_);
+//             p_evhttp  = p_;
+//         }
+
+//         void operator()(int ec, evhttp_connection * evhttp_con) { on_accept(ec, evhttp_con); }
+
+//         struct evhttp * get_evhttp() const { return p_evhttp; }
+
+//     private:
+//         on_accept_cb on_accept;
+//         struct evhttp * p_evhttp;
+//     };
+//     evconnlistener_cb accept_cb = [](struct evconnlistener * listener_ev, evutil_socket_t fd, struct sockaddr * sa, int socklen,
+//                                      void * arg) {
+//         listener_ev_cb_obj * on_accept = (listener_ev_cb_obj *) arg;
+//         evhttp_connection * evcon      = evhttp_get_request_connection_wrapper(on_accept->get_evhttp(), fd, sa, socklen);
+//         evcon->http_server             = on_accept->get_evhttp();
+//         TAILQ_INSERT_TAIL(&evcon->http_server->connections, evcon, next);
+//         (*on_accept)(0, evcon);
+//     };
+//     struct evhttp_bound_socket * bound_socket = evhttp_bind_socket_with_handle(p_evhttp, addr.c_str(), port);
+//     evconnlistener_set_cb(bound_socket->listener, accept_cb, new listener_ev_cb_obj(std::move(func), p_evhttp));
+// };
 
 void read_async(evhttp_connection * evhttp_con, std::function<void(int rc, evhttp_request * req)> func_complete_)
 {
@@ -240,7 +307,7 @@ void write_async(std::shared_ptr<http::request> req, std::string data, std::func
         evbuffer_add_buffer(req->get_request()->output_buffer, evb);
 
     /* Adds headers to the response */
-    evhttp_make_header_wrapper(evcon, req->get_request());
+    evhttp_make_header(evcon, req->get_request());
 
     bufferevent_data_cb write_cb = [](struct bufferevent * bufev, void * arg) {
         bufev_cb_obj * on_write = (bufev_cb_obj *) arg;
@@ -536,73 +603,73 @@ public:
 
 std::unordered_map<std::string, std::vector<std::weak_ptr<ws_connection>>> ws_connection::peer_mgr;
 
-class http_app : public std::enable_shared_from_this<http_app>
-{
-    typedef std::function<void(std::shared_ptr<http::request>)> route_hanhdl_func;
-    typedef struct wrapper_s
-    {
+// class http_app : public std::enable_shared_from_this<http_app>
+// {
+//     typedef std::function<void(std::shared_ptr<http::request>)> route_hanhdl_func;
+//     typedef struct wrapper_s
+//     {
 
-        wrapper_s(std::shared_ptr<http_app> p) { p_http = p; }
-        ~wrapper_s() { p_http.reset(); }
-        std::shared_ptr<http_app> p_http;
-    } wrapper;
+//         wrapper_s(std::shared_ptr<http_app> p) { p_http = p; }
+//         ~wrapper_s() { p_http.reset(); }
+//         std::shared_ptr<http_app> p_http;
+//     } wrapper;
 
-public:
-    http_app(event_base * base_, std::string addr_, u_int16_t port_)
-    {
-        addr     = addr_;
-        port     = port_;
-        base     = base_;
-        p_evhttp = evhttp_new(base_);
-    }
+// public:
+//     http_app(event_base * base_, std::string addr_, u_int16_t port_)
+//     {
+//         addr     = addr_;
+//         port     = port_;
+//         base     = base_;
+//         p_evhttp = evhttp_new(base_);
+//     }
 
-    ~http_app()
-    {
-        // TODO: free p_evhttp
-    }
+//     ~http_app()
+//     {
+//         // TODO: free p_evhttp
+//     }
 
-    void start()
-    {
-        http::http_init(p_evhttp, addr, port,
-                        std::bind(&http_app::on_accept, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
-    }
+//     void start()
+//     {
+//         http::http_init(p_evhttp, addr, port,
+//                         std::bind(&http_app::on_accept, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+//     }
 
-    void add_ws_handler(ws_connection::ws_on_read_func ws_on_read_) { ws_on_read = ws_on_read_; };
+//     void add_ws_handler(ws_connection::ws_on_read_func ws_on_read_) { ws_on_read = ws_on_read_; };
 
-private:
-    void on_accept(int ec, evhttp_connection * evhttp_con)
-    {
-        auto p = std::shared_ptr<ws_connection>(new ws_connection(evhttp_con,
-                                                                  std::bind(&http_app::on_msg_read, http_app::shared_from_this(),
-                                                                            std::placeholders::_1, std::placeholders::_2)),
-                                                [](const auto p) {
-                                                    std::cout << "[DEBUG] ws_connection is deleted. " << std::endl;
-                                                    delete p;
-                                                });
-        p->start();
-    }
+// private:
+//     void on_accept(int ec, evhttp_connection * evhttp_con)
+//     {
+//         auto p = std::shared_ptr<ws_connection>(new ws_connection(evhttp_con,
+//                                                                   std::bind(&http_app::on_msg_read, http_app::shared_from_this(),
+//                                                                             std::placeholders::_1, std::placeholders::_2)),
+//                                                 [](const auto p) {
+//                                                     std::cout << "[DEBUG] ws_connection is deleted. " << std::endl;
+//                                                     delete p;
+//                                                 });
+//         p->start();
+//     }
 
-    void on_msg_read(std::string msg, std::shared_ptr<ws_connection> sp)
-    {
-        std::cout << "[DEBUG][http_app] ENTER" << std::endl;
-        if (ws_on_read)
-            ws_on_read(msg, sp);
-    }
+//     void on_msg_read(std::string msg, std::shared_ptr<ws_connection> sp)
+//     {
+//         std::cout << "[DEBUG][http_app] ENTER" << std::endl;
+//         if (ws_on_read)
+//             ws_on_read(msg, sp);
+//     }
 
-private:
-    evhttp * p_evhttp;
-    std::string addr;
-    int port;
-    event_base * base;
-    ws_connection::ws_on_read_func ws_on_read;
-};
+// private:
+//     evhttp * p_evhttp;
+//     std::string addr;
+//     int port;
+//     event_base * base;
+//     ws_connection::ws_on_read_func ws_on_read;
+// };
 
-// helper function
-std::shared_ptr<http_app> make_ws(event_base * base, const std::string & addr, uint16_t port)
-{
-    std::shared_ptr<http_app> p(new http_app(base, addr, port), [](auto p) {
-        // std::cout << "[DEBUG][http_app] is deleted. \n";
-        delete p;
-    });
-    return p;
-}
+// // helper function
+// std::shared_ptr<http_app> make_ws(event_base * base, const std::string & addr, uint16_t port)
+// {
+//     std::shared_ptr<http_app> p(new http_app(base, addr, port), [](auto p) {
+//         // std::cout << "[DEBUG][http_app] is deleted. \n";
+//         delete p;
+//     });
+//     return p;
+// }
