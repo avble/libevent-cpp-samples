@@ -2,35 +2,45 @@
 
 using namespace std::placeholders;
 
-int main(int argc, char ** argv)
+int main(int argc, char ** args)
 {
-    typedef std::function<void(std::shared_ptr<http::request>)> route_hanhdl_func;
+    if (argc != 3)
+    {
+        std::cerr << "\nUsage: " << args[0] << " address port\n" << "Example: \n" << args[0] << " 0.0.0.0 12345" << std::endl;
+        return -1;
+    }
 
-    evhttp * p_evhttp = evhttp_new(Event::event_base_global());
-    std::string addr  = "127.0.0.1";
-    uint16_t port     = 12345;
-    std::unordered_map<std::string, route_hanhdl_func> routes;
+    std::string addr(args[1]);
+    uint16_t port = static_cast<uint16_t>(std::atoi(args[2]));
 
-    routes["/route_01"] = [](std::shared_ptr<http::request> req) { req->do_write("hello from route 01\n"); };
-    routes["/route_02"] = [](std::shared_ptr<http::request> req) { req->do_write("hello from route 02\n"); };
+    {
+        http2::start_server(port, [](int rc, http2::response res) {
+            res.body() = "hello world";
+            res.send_reply(200);
+        });
+    }
 
-    const auto request_dispatch = [&routes](std::shared_ptr<http::request> req) {
-        auto path = req->get_uri_path();
-        if (auto route_ = (path.has_value() ? routes[path.value()] : route_hanhdl_func()))
-        {
-            route_(req);
-        }
-        else
-        {
-            req->do_write("wowo...");
-        }
-    };
+    {
+        std::unordered_map<std::string, http2::on_read_request_complete_func> routes;
 
-    auto on_accept = [&request_dispatch](struct evhttp_connection * evcon) {
-        std::make_shared<http_connection>(evcon, std::bind(request_dispatch, ::_1))->start();
-    };
+        routes["/route_01"] = [](int rc, http2::response res) {
+            res.body() = "hello from route_01";
+            res.send_reply();
+        };
+        routes["/route_02"] = [](int rc, http2::response res) {
+            res.body() = "hello from route_02";
+            res.send_reply();
+        };
 
-    http::start_async(p_evhttp, port, on_accept, ::_1);
+        auto route_handler = [&routes](int rc, http2::response res) {
+            std::shared_ptr<http2::request> req = res.reqwest();
+            auto path                           = req->get_uri_path();
+            if (auto route_ = (path.has_value() ? routes[path.value()] : http2::on_read_request_complete_func()))
+                route_(rc, std::move(res));
+            else
+                res.send_reply(404);
+        };
 
-    Event::run_forever();
+        http2::start_server(port, route_handler);
+    }
 }

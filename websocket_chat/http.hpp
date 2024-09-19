@@ -35,7 +35,7 @@ std::optional<std::string> evhttp_request_uri_get_path(evhttp_request * req)
     return value == NULL ? std::nullopt : std::optional<std::string>(value);
 }
 
-void evhttp_request_header_set(evhttp_request * req, const std::string & key, const std::string & val)
+void evhttp_request_output_header_set(evhttp_request * req, const std::string & key, const std::string & val)
 {
     evhttp_add_header(evhttp_request_get_output_headers(req), key.c_str(), val.c_str());
 }
@@ -602,74 +602,3 @@ public:
 };
 
 std::unordered_map<std::string, std::vector<std::weak_ptr<ws_connection>>> ws_connection::peer_mgr;
-
-// class http_app : public std::enable_shared_from_this<http_app>
-// {
-//     typedef std::function<void(std::shared_ptr<http::request>)> route_hanhdl_func;
-//     typedef struct wrapper_s
-//     {
-
-//         wrapper_s(std::shared_ptr<http_app> p) { p_http = p; }
-//         ~wrapper_s() { p_http.reset(); }
-//         std::shared_ptr<http_app> p_http;
-//     } wrapper;
-
-// public:
-//     http_app(event_base * base_, std::string addr_, u_int16_t port_)
-//     {
-//         addr     = addr_;
-//         port     = port_;
-//         base     = base_;
-//         p_evhttp = evhttp_new(base_);
-//     }
-
-//     ~http_app()
-//     {
-//         // TODO: free p_evhttp
-//     }
-
-//     void start()
-//     {
-//         http::http_init(p_evhttp, addr, port,
-//                         std::bind(&http_app::on_accept, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
-//     }
-
-//     void add_ws_handler(ws_connection::ws_on_read_func ws_on_read_) { ws_on_read = ws_on_read_; };
-
-// private:
-//     void on_accept(int ec, evhttp_connection * evhttp_con)
-//     {
-//         auto p = std::shared_ptr<ws_connection>(new ws_connection(evhttp_con,
-//                                                                   std::bind(&http_app::on_msg_read, http_app::shared_from_this(),
-//                                                                             std::placeholders::_1, std::placeholders::_2)),
-//                                                 [](const auto p) {
-//                                                     std::cout << "[DEBUG] ws_connection is deleted. " << std::endl;
-//                                                     delete p;
-//                                                 });
-//         p->start();
-//     }
-
-//     void on_msg_read(std::string msg, std::shared_ptr<ws_connection> sp)
-//     {
-//         std::cout << "[DEBUG][http_app] ENTER" << std::endl;
-//         if (ws_on_read)
-//             ws_on_read(msg, sp);
-//     }
-
-// private:
-//     evhttp * p_evhttp;
-//     std::string addr;
-//     int port;
-//     event_base * base;
-//     ws_connection::ws_on_read_func ws_on_read;
-// };
-
-// // helper function
-// std::shared_ptr<http_app> make_ws(event_base * base, const std::string & addr, uint16_t port)
-// {
-//     std::shared_ptr<http_app> p(new http_app(base, addr, port), [](auto p) {
-//         // std::cout << "[DEBUG][http_app] is deleted. \n";
-//         delete p;
-//     });
-//     return p;
-// }

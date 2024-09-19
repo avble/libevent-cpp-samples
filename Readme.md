@@ -1,5 +1,5 @@
 # Introduction
-samples in cpp for libevents
+This repository provides examples written in cpp and backed by libevents.
 
 # Compile
 ``` shell
@@ -11,36 +11,111 @@ $ make
 # samples
 ## [http](https://github.com/avble/libevent-cpp-samples/tree/main/http)
 
+The server can be started at below.
 ``` cpp
-    typedef std::function<void(std::shared_ptr<http::request>)> route_hanhdl_func;
+    http2::start_server(port, [](int rc, http2::response res) {
+        res.body() = "hello world";
+        res.send_reply(200);
+    });
+```
 
-    evhttp * p_evhttp = evhttp_new(Event::event_base_global());
-    std::string addr  = "127.0.0.1";
-    uint16_t port     = 12345;
-    std::unordered_map<std::string, route_hanhdl_func> routes;
+In case you want to create your own routing, a route handler can be written as below example
 
-    routes["/route_01"] = [](std::shared_ptr<http::request> req) { req->do_write("hello from route 01\n"); };
-    routes["/route_02"] = [](std::shared_ptr<http::request> req) { req->do_write("hello from route 02\n"); };
+``` cpp
+    std::unordered_map<std::string, http2::on_read_request_complete_func> routes;
 
-    const auto request_dispatch = [&routes](std::shared_ptr<http::request> req) {
-        auto path = req->get_uri_path();
-        if (auto route_ = (path.has_value() ? routes[path.value()] : route_hanhdl_func()))
-        {
-            route_(req);
-        }
+    routes["/route_01"] = [](int rc, http2::response res) {
+        res.body() = "hello from route_01";
+        res.send_reply();
+    };
+    routes["/route_02"] = [](int rc, http2::response res) {
+        res.body() = "hello from route_02";
+        res.send_reply();
+    };
+
+    auto route_handler = [&routes](int rc, http2::response res) {
+        std::shared_ptr<http2::request> req = res.reqwest();
+        auto path                           = req->get_uri_path();
+        if (auto route_ = (path.has_value() ? routes[path.value()] : http2::on_read_request_complete_func()))
+            route_(rc, std::move(res));
         else
-        {
-            req->do_write("wowo...");
-        }
+            res.send_reply(404);
     };
 
-    auto on_accept = [&request_dispatch](struct evhttp_connection * evcon) {
-        std::make_shared<http_connection>(evcon, std::bind(request_dispatch, ::_1))->start();
+    http2::start_server(port, route_handler);
+
+```
+
+## [http upload (chunk)] (https://github.com/avble/libevent-cpp-samples/tree/main/http_chunk)
+
+```cpp
+    std::string addr(args[1]);
+    uint16_t port = static_cast<uint16_t>(std::atoi(args[2]));
+
+    event_base * base = event_base_new();
+    evhttp * p_evhttp = evhttp_new(base);
+
+    on_write_func on_write = [](evhttp_connection * evcon, on_read_func on_read, int rc) { read_async(evcon, on_read); };
+
+    on_read_func on_read_chunk = [&on_write, &on_read_chunk](int rc, evhttp_request * req) {
+        // std::cout << "[DEBUG][file] ENTER" << std::endl;
+        std::ofstream of("./file_01");
+        std::vector<uint8_t> buff = request_get_chunk_from_input_buffer(req);
+        for (const auto & v : buff)
+            of << v;
+
+        write_async(req, 200, "OK", "", std::bind(on_write, req->evcon, on_read_chunk, ::_1));
     };
 
-    http::start_async(p_evhttp, port, on_accept, ::_1);
+    auto on_accept = [&on_read_chunk](struct evhttp_connection * evcon) { read_async(evcon, on_read_chunk); };
 
-    Event::run_forever();
+    start_async(p_evhttp, port, on_accept, ::_1);
+
+    event_base_dispatch(base);
+```
+
+Test with the below command to upload 1Gb byte, it works
+``` shell
+# run sever
+$./http_srv_chunk 0.0.0.0 12345
+# upload file with curl command
+$ curl -H "Transfer-Encoding" --data-binary  @file_1gb 127.0.0.1:12345
+```
+
+## [http upload (chunk)] (https://github.com/avble/libevent-cpp-samples/tree/main/http_chunk)
+
+```cpp
+    std::string addr(args[1]);
+    uint16_t port = static_cast<uint16_t>(std::atoi(args[2]));
+
+    event_base * base = event_base_new();
+    evhttp * p_evhttp = evhttp_new(base);
+
+    on_write_func on_write = [](evhttp_connection * evcon, on_read_func on_read, int rc) { read_async(evcon, on_read); };
+
+    on_read_func on_read_chunk = [&on_write, &on_read_chunk](int rc, evhttp_request * req) {
+        // std::cout << "[DEBUG][file] ENTER" << std::endl;
+        std::ofstream of("./file_01");
+        std::vector<uint8_t> buff = request_get_chunk_from_input_buffer(req);
+        for (const auto & v : buff)
+            of << v;
+
+        write_async(req, 200, "OK", "", std::bind(on_write, req->evcon, on_read_chunk, ::_1));
+    };
+
+    auto on_accept = [&on_read_chunk](struct evhttp_connection * evcon) { read_async(evcon, on_read_chunk); };
+
+    start_async(p_evhttp, port, on_accept, ::_1);
+
+    event_base_dispatch(base);
+```
+
+Test with the below command to upload 1Gb byte, it works
+``` shell
+# run sever
+$./http_srv_chunk 0.0.0.0 12345
+# upload file with curl command
+$ curl -H "Transfer-Encoding" --data-binary  @file_1gb 127.0.0.1:12345
 ```
 
 ## [websocket chat application](https://github.com/avble/libevent-cpp-samples/tree/main/websocket_chat)

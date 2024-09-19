@@ -131,8 +131,76 @@ std::optional<std::string> evhttp_request_uri_get_path(evhttp_request * req)
     return value == NULL ? std::nullopt : std::optional<std::string>(value);
 }
 
-void evhttp_request_header_set(evhttp_request * req, const std::string & key, const std::string & val)
+void evhttp_request_output_header_set(evhttp_request * req, const std::string & key, const std::string & val)
 {
     evhttp_add_header(evhttp_request_get_output_headers(req), key.c_str(), val.c_str());
 }
+
+// TCP helper
+namespace tcp {
+
+// int make_socket_nonblocking(uint16_t port) {}
+} // namespace tcp
+
+// listener
+template <class F, class... Args>
+void listener_new(uint16_t port, F f, Args... args)
+{
+    class _internal_data
+    {
+    public:
+        _internal_data(F f, Args... args) : cb(std::bind(f, args...)) {}
+
+        void operator()() { cb(); }
+
+    private:
+        std::function<void()> cb;
+    };
+
+    auto on_accept = [](struct evconnlistener * evconnecion_listener_, evutil_socket_t fd, struct sockaddr * da, int socklen,
+                        void * arg) {
+        _internal_data * p                 = (_internal_data *) arg;
+        struct evhttp_bound_socket * bound = arg;
+
+        struct evhttp * http = bound->http;
+
+        struct bufferevent * bev = NULL;
+        if (bound->bevcb)
+            bev = bound->bevcb(http->base, bound->bevcbarg);
+
+        (*p)(static_cast<int>(fd));
+    };
+
+    struct sockaddr_in addr;
+    std::memset(&addr, 0, sizeof(addr));
+    addr.sin_family      = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    addr.sin_port = htons(port);
+    int flags     = 0;
+    flags |= LEV_OPT_CLOSE_ON_FREE;
+    flags |= LEV_OPT_CLOSE_ON_EXEC;
+    flags |= LEV_OPT_REUSEABLE;
+    struct sockaddr * sa = (struct sockaddr *) &addr;
+
+    auto listener = evconnlistener_new_bind(Event::event_base_global(), on_accept, new _internal_data(f, args...), flags, -1, sa,
+                                            sizeof(sockaddr_in));
+    if (listener == NULL)
+        return listener;
+
+    // auto accept = [](struct evconnlistener *, evutil_socket_t, struct sockaddr *, int socklen, void *) {
+    //     std::cout << "[DEBUG] accept " << std::endl;
+    // };
+
+    // evconnlistener_set_cb(listener, accept, NULL);
+
+    return listener;
 }
+
+void listener_del(evconnlistener * listener_)
+{
+    evconnlistener_free(listener_);
+    listener_ = NULL;
+}
+
+} // namespace Event_helper

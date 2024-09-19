@@ -131,7 +131,7 @@ std::optional<std::string> evhttp_request_uri_get_path(evhttp_request * req)
     return value == NULL ? std::nullopt : std::optional<std::string>(value);
 }
 
-void evhttp_request_header_set(evhttp_request * req, const std::string & key, const std::string & val)
+void evhttp_request_output_header_set(evhttp_request * req, const std::string & key, const std::string & val)
 {
     evhttp_add_header(evhttp_request_get_output_headers(req), key.c_str(), val.c_str());
 }

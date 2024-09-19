@@ -6,4 +6,5 @@ project(libevent_sample_cpp
 include(external.cmake)
 
 add_subdirectory(http)
+add_subdirectory(http_chunk)
 add_subdirectory(websocket_chat)
