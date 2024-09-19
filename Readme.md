@@ -46,7 +46,7 @@ In case you want to create your own routing, a route handler can be written as b
 
 ```
 
-## [http-chunk upload] (https://github.com/avble/libevent-cpp-samples/tree/main/http_chunk)
+## [http chunk upload](https://github.com/avble/libevent-cpp-samples/tree/main/http_chunk)
 
 ```cpp
     std::string addr(args[1]);
@@ -82,7 +82,7 @@ $./http_srv_chunk 0.0.0.0 12345
 $ curl -H "Transfer-Encoding" --data-binary  @file_1gb 127.0.0.1:12345
 ```
 
-## [websocket chat application](https://github.com/avble/libevent-cpp-samples/tree/main/websocket_chat)
+## [websocket chat application] (https://github.com/avble/libevent-cpp-samples/tree/main/websocket_chat)
 
 source code of websocket looks like below
 
